@@ -1,5 +1,8 @@
+import os
+
 import sys
 import cv2
+import numpy as np
 
 import PyQt5
 from PyQt5 import uic
@@ -58,56 +61,86 @@ class WindowClass(QMainWindow, form_class) :
         super().__init__()
         self.setupUi(self)
         
-#        QShortcut(Qt.Key_Up, self, self.button1Function)
+        self.video_load = False
         
-                
         self.pushButton_video_load.clicked.connect(self.loadVideo)
-        self.pushButton.clicked.connect(self.button1Function)
+        self.pushButton_play.clicked.connect(self.button1Function)
+        self.pushButton_scene_init.clicked.connect(self.initSceneSetting)
         self.pushButton_scene_start.clicked.connect(self.setSceneStartFrameIndex)
         self.pushButton_scene_end.clicked.connect(self.setSceneEndFrameIndex)
-        self.pushButton_all_scenes_save.clicked.connect(self.saveAllScenes)
-                
+        self.pushButton_save_all_scenes.clicked.connect(self.saveAllScenes)
+        
+        self.pushButton_play.setEnabled(False)
+        self.pushButton_scene_init.setEnabled(False)
+        self.pushButton_scene_start.setEnabled(False)
+        self.pushButton_scene_end.setEnabled(False)
+        self.pushButton_save_all_scenes.setEnabled(False)
+        
+        QShortcut(Qt.Key_Space, self, self.button1Function)
+    
+    def loadVideo(self):
+        
+        self.video_file = QFileDialog.getOpenFileName(self)[0]
+        
+        if len(self.video_file) == 0:
+            return None
+        
         self.scene_start_frame_index = 0
         self.scene_end_frame_index = 0
-
-        self.pushButton_scene_end.setEnabled(False)
-        self.pushButton.setEnabled(False)
         
-    def loadVideo(self):
-        self.video_file = QFileDialog.getOpenFileName(self, )[0]
         self.video_name = Path(self.video_file).resolve().stem
         self.frame_index = 0
 
         self.video_capture = cv2.VideoCapture(self.video_file, apiPreference=cv2.CAP_FFMPEG)
         self.video_fps = self.video_capture.get(cv2.CAP_PROP_FPS)
         self.video_num_frames = int(self.video_capture.get(cv2.CAP_PROP_FRAME_COUNT))
+        
         self.video_play_timer = QTimer()
         self.video_play_timer.setInterval(1000./self.video_fps)
         self.video_play_timer.timeout.connect(self.read_next_frame)
-        self.play = False
         
+        self.scene_progressbar_timer = QTimer()
+        self.scene_progressbar_timer.setInterval(1000./self.video_fps)
+        self.scene_progressbar_timer.timeout.connect(self.draw_scene_progress_bar)
+        self.scene_progressbar_timer.start()
+        
+        self.play = False
         
         self.horizontalSlider.valueChanged.connect(self.showHorizontalSliderValue)
         self.horizontalSlider.setMinimum(0)
         self.horizontalSlider.setMaximum(self.video_num_frames)
         
-        QShortcut(Qt.Key_Space, self, self.button1Function)
-        self.pushButton.setEnabled(True)
+        self.pushButton_play.setEnabled(True)
+        self.pushButton_scene_init.setEnabled(True)
+        self.pushButton_scene_start.setEnabled(True)
+        self.pushButton_scene_end.setEnabled(False)
+        self.pushButton_save_all_scenes.setEnabled(True)
+        
+        self.listWidget.clear()
+        self.read_next_frame()
+        
+        self.video_load = True
 
     
     def button1Function(self):
+        if not self.video_load:
+            return None
+        
         if self.play:
             self.play = False
             self.video_play_timer.stop()
         else:
             self.play = True
             self.video_play_timer.start()
+    
+    def initSceneSetting(self):
+        self.pushButton_scene_start.setEnabled(True)
+        self.pushButton_scene_end.setEnabled(False)
         
     def setSceneStartFrameIndex(self):
         self.scene_start_frame_index = self.frame_index
         self.pushButton_scene_start.setEnabled(False)
         self.pushButton_scene_end.setEnabled(True)
-        
         
     def setSceneEndFrameIndex(self):
         self.scene_end_frame_index = self.frame_index
@@ -117,6 +150,16 @@ class WindowClass(QMainWindow, form_class) :
         self.listWidget.addItem(str(self.scene_start_frame_index) + "_" + str(self.scene_end_frame_index))
     
     def saveAllScenes(self):
+        
+        if self.play:
+            self.play = False
+            self.video_play_timer.stop()
+        
+        self.scene_progressbar_timer.stop()
+        
+        if not os.path.isdir("./" + self.video_name):
+            os.mkdir("./" + self.video_name)
+        
         for item_index in range(self.listWidget.count()):
             item = self.listWidget.item(item_index).text()
             item = item.split('_')
@@ -124,8 +167,22 @@ class WindowClass(QMainWindow, form_class) :
             start_frame_index = int(item[0])
             end_frame_index = int(item[1])
             
-            print(start_frame_index, end_frame_index)
+            self.video_capture.set(cv2.CAP_PROP_POS_FRAMES, start_frame_index)
             
+            scene_folder = os.path.join("./", self.video_name, "s" + format(item_index + 1, '02d'))
+            for i in range(start_frame_index, end_frame_index):
+                if not os.path.isdir(scene_folder):
+                    os.mkdir(scene_folder)
+                
+                read_frame, frame = self.video_capture.read()
+                
+                frame_name = self.video_name + "_f" + str(i) + ".png"
+                print(frame_name)
+                cv2.imwrite(os.path.join(scene_folder, frame_name), frame)
+                
+            print(start_frame_index, end_frame_index)
+        
+        self.scene_progressbar_timer.start()
             
     def showHorizontalSliderValue(self):
 
@@ -143,24 +200,47 @@ class WindowClass(QMainWindow, form_class) :
         
         if read_frame:
             frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            frame = letter_box_resize(frame, (self.label.width(), self.label.height()))
+            frame = letter_box_resize(frame, (self.label_frame.width(), self.label_frame.height()))
             height, width, channels = frame.shape
             bytesPerLine = channels * width
             qImg = QImage(frame.data, width, height, bytesPerLine, QImage.Format_RGB888)
             pixmap01 = QPixmap.fromImage(qImg)
             
-            self.label.setPixmap(pixmap01)
+            self.label_frame.setPixmap(pixmap01)
             self.frame_index += 1
-            
-            print(self.frame_index)
-            
+
             self.horizontalSlider.blockSignals(True)
             self.horizontalSlider.setValue(self.frame_index)
             self.horizontalSlider.blockSignals(False)
             
             self.label_frame_index.setText(str(self.frame_index)+ "/" + str(self.video_num_frames))
+
     
-    
+    def draw_scene_progress_bar(self):
+        
+        scene_progress_bar = np.zeros((self.label_scene_progress_bar.height(), self.label_scene_progress_bar.width(), 3), np.uint8)
+        
+        if not self.pushButton_scene_start.isEnabled():
+            start_frame_index = int(self.label_scene_progress_bar.width() * (float(self.scene_start_frame_index) / self.video_num_frames))
+            end_frame_index = int(self.label_scene_progress_bar.width() * (float(self.frame_index) / self.video_num_frames))
+            scene_progress_bar[:, start_frame_index:end_frame_index] = [255, 255, 0]
+            
+        for item_index in range(self.listWidget.count()):
+            item = self.listWidget.item(item_index).text()
+            item = item.split('_')
+            
+            start_frame_index = int(self.label_scene_progress_bar.width() * (float(item[0]) / self.video_num_frames))
+            end_frame_index = int(self.label_scene_progress_bar.width() * (float(item[1]) / self.video_num_frames))
+            
+            scene_progress_bar[:, start_frame_index:end_frame_index] = [0, 255, 0]
+
+
+        
+        height, width, channels = scene_progress_bar.shape
+        bytesPerLine = channels * width
+        qImg = QImage(scene_progress_bar.data, width, height, bytesPerLine, QImage.Format_RGB888)
+        pixmap01 = QPixmap.fromImage(qImg)
+        self.label_scene_progress_bar.setPixmap(pixmap01)
         
 
 if __name__ == "__main__" :
