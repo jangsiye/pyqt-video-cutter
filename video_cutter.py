@@ -61,6 +61,8 @@ class WindowClass(QMainWindow, form_class) :
         super().__init__()
         self.setupUi(self)
         
+        self.video_capture = None
+        
         self.pushButton_video_load.clicked.connect(self.loadVideo)
         self.pushButton_play.clicked.connect(self.play)
         self.pushButton_scene_init.clicked.connect(self.initSceneSetting)
@@ -76,6 +78,11 @@ class WindowClass(QMainWindow, form_class) :
         
         QShortcut(Qt.Key_Space, self, self.play)
     
+    def video_capture_release(self):
+        if self.video_capture == None:
+            return None
+        self.video_capture.release()
+    
     def loadVideo(self):
         
         self.video_file = QFileDialog.getOpenFileName(self)[0]
@@ -89,7 +96,15 @@ class WindowClass(QMainWindow, form_class) :
         self.video_name = Path(self.video_file).resolve().stem
         self.frame_index = 0
 
+        self.video_capture_release()
         self.video_capture = cv2.VideoCapture(self.video_file, apiPreference=cv2.CAP_FFMPEG)
+        
+        if self.video_capture == None:
+            return None
+        
+        if not self.video_capture.isOpened():    
+            return None
+        
         self.video_fps = self.video_capture.get(cv2.CAP_PROP_FPS)
         self.video_num_frames = int(self.video_capture.get(cv2.CAP_PROP_FRAME_COUNT))
         
@@ -119,7 +134,6 @@ class WindowClass(QMainWindow, form_class) :
         
         self.video_load = True
 
-    
     def play(self):
         if self.play:
             self.play = False
