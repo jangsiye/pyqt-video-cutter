@@ -1,3 +1,7 @@
+# file open icon: https://www.flaticon.com/free-icon/open-file-button_62319
+# play icon: https://www.flaticon.com/free-icon/play_727245?term=play&page=1&position=7&related_item_id=727245
+
+import pathlib
 import os
 
 import sys
@@ -12,9 +16,12 @@ from PyQt5.QtCore import *
 
 from pathlib import Path
 
+file_abspath = os.path.abspath(__file__)
+folder_abspath = os.path.dirname(file_abspath)
+
 #UI파일 연결
 #단, UI파일은 Python 코드 파일과 같은 디렉토리에 위치해야한다.
-form_class = uic.loadUiType("simple_video.ui")[0]
+form_class = uic.loadUiType(os.path.join(folder_abspath, "simple_video.ui"))[0]
 
 def letter_box_resize(img, dsize):
     
@@ -63,29 +70,64 @@ class WindowClass(QMainWindow, form_class) :
         
         self.video_capture = None
         
-        self.pushButton_video_load.clicked.connect(self.loadVideo)
-        self.pushButton_play.clicked.connect(self.play)
-        self.pushButton_scene_init.clicked.connect(self.initSceneSetting)
-        self.pushButton_scene_start.clicked.connect(self.setSceneStartFrameIndex)
-        self.pushButton_scene_end.clicked.connect(self.setSceneEndFrameIndex)
-        self.pushButton_save_all_scenes.clicked.connect(self.saveAllScenes)
+        #Icon Load
+        self.pushButton_file_open.setIcon(QIcon(os.path.join(folder_abspath, 'icon_file_open.png')))
         
+        self.pushButton_play.setIcon(QIcon(os.path.join(folder_abspath, 'icon_play.png')))
+        self.pushButton_play.setIconSize(QSize(32, 32))
+        
+        self.pushButton_scene_save.setIcon(QIcon(os.path.join(folder_abspath, 'icon_save.png')))
+        self.pushButton_scene_save.setIconSize(QSize(32, 32))
+        
+        self.pushButton_scene_remove.setIcon(QIcon(os.path.join(folder_abspath, 'icon_remove.png')))
+        self.pushButton_scene_save.setIconSize(QSize(32, 32))
+    
+        #버튼별 이벤트 연결
+        self.pushButton_file_open.clicked.connect(self.load_video)
+        self.pushButton_play.clicked.connect(self.play)
+        self.pushButton_scene_init.pressed.connect(self.init_scene_setting)
+        self.pushButton_scene_start.pressed.connect(self.set_scene_start_frame)
+        self.pushButton_scene_end.pressed.connect(self.set_scene_end_frame)
+        self.pushButton_scene_save.clicked.connect(self.save)
+        self.pushButton_scene_remove.clicked.connect(self.remove_scene)
+        
+        #버튼 비활성화
         self.pushButton_play.setEnabled(False)
         self.pushButton_scene_init.setEnabled(False)
         self.pushButton_scene_start.setEnabled(False)
         self.pushButton_scene_end.setEnabled(False)
-        self.pushButton_save_all_scenes.setEnabled(False)
+        self.pushButton_scene_save.setEnabled(False)
+        self.pushButton_scene_remove.setEnabled(False)
         
+        
+        #슬라이더 비활성화 및 이벤트 연결
+        self.horizontalSlider.setEnabled(False)
+        self.horizontalSlider.valueChanged.connect(self.move_frame)
+
+        #타이머 정의
+        self.scene_progressbar_timer = QTimer()
+        
+        self.video_play_timer = QTimer()
+        self.video_play_timer.timeout.connect(self.read_next_frame)
+        
+        self.scene_progressbar_timer.setInterval(1000/60.)
+        self.scene_progressbar_timer.timeout.connect(self.draw_scene_progress_bar)
+        self.scene_progressbar_timer.start()
+
+        #키 이벤트 정의
         QShortcut(Qt.Key_Space, self, self.play)
+        
+        #씬 위젯 이벤트 연결
+        self.listWidget.itemClicked.connect(self.move_scene)
     
     def video_capture_release(self):
         if self.video_capture == None:
             return None
         self.video_capture.release()
     
-    def loadVideo(self):
+    def load_video(self):
         
-        self.video_file = QFileDialog.getOpenFileName(self)[0]
+        self.video_file = QFileDialog.getOpenFileName(self, "Open a file", folder_abspath , "video file (*.mp4 *.avi *.mkv *.MP4 *.AVI *.MKV)")[0]
         
         if len(self.video_file) == 0:
             return None
@@ -99,72 +141,91 @@ class WindowClass(QMainWindow, form_class) :
         self.video_capture_release()
         self.video_capture = cv2.VideoCapture(self.video_file, apiPreference=cv2.CAP_FFMPEG)
         
-        if self.video_capture == None:
-            return None
-        
-        if not self.video_capture.isOpened():    
-            return None
-        
+        if self.video_capture == None or not self.video_capture.isOpened():
+            return self.video_capture_release()
+   
         self.video_fps = self.video_capture.get(cv2.CAP_PROP_FPS)
         self.video_num_frames = int(self.video_capture.get(cv2.CAP_PROP_FRAME_COUNT))
         
-        self.video_play_timer = QTimer()
         self.video_play_timer.setInterval(1000./self.video_fps)
-        self.video_play_timer.timeout.connect(self.read_next_frame)
+                
+        self.horizontalSlider.blockSignals(True)
+        self.horizontalSlider.setValue(0)
+        self.horizontalSlider.blockSignals(False)
         
-        self.scene_progressbar_timer = QTimer()
-        self.scene_progressbar_timer.setInterval(1000./self.video_fps)
-        self.scene_progressbar_timer.timeout.connect(self.draw_scene_progress_bar)
-        self.scene_progressbar_timer.start()
-        
-        self.play = False
-        
-        self.horizontalSlider.valueChanged.connect(self.showHorizontalSliderValue)
+        self.horizontalSlider.setEnabled(True)
         self.horizontalSlider.setMinimum(0)
         self.horizontalSlider.setMaximum(self.video_num_frames)
         
         self.pushButton_play.setEnabled(True)
-        self.pushButton_scene_init.setEnabled(True)
+        self.pushButton_scene_init.setEnabled(False)
         self.pushButton_scene_start.setEnabled(True)
         self.pushButton_scene_end.setEnabled(False)
-        self.pushButton_save_all_scenes.setEnabled(True)
+        self.pushButton_scene_save.setEnabled(True)
+        self.pushButton_scene_remove.setEnabled(True)
         
         self.listWidget.clear()
         self.read_next_frame()
         
-        self.video_load = True
-
     def play(self):
-        if self.play:
-            self.play = False
+        if not self.pushButton_play.isEnabled():
+            return None
+        
+        if self.video_play_timer.isActive():# 재생중이였다면
+            self.pushButton_play.setIcon(QIcon(os.path.join(folder_abspath, 'icon_play.png')))
             self.video_play_timer.stop()
-        else:
-            self.play = True
+        else: # 일시정지 상태였다면
+            self.pushButton_play.setIcon(QIcon(os.path.join(folder_abspath, 'icon_pause.png')))
             self.video_play_timer.start()
     
-    def initSceneSetting(self):
+    def init_scene_setting(self):
         self.pushButton_scene_start.setEnabled(True)
         self.pushButton_scene_end.setEnabled(False)
+        self.pushButton_scene_init.setEnabled(False)
         
-    def setSceneStartFrameIndex(self):
+        
+    def set_scene_start_frame(self):
         self.scene_start_frame_index = self.frame_index
+        
         self.pushButton_scene_start.setEnabled(False)
         self.pushButton_scene_end.setEnabled(True)
-        
-    def setSceneEndFrameIndex(self):
+        self.pushButton_scene_init.setEnabled(True)
+
+    def set_scene_end_frame(self):
         self.scene_end_frame_index = self.frame_index
-        self.pushButton_scene_start.setEnabled(True)
-        self.pushButton_scene_end.setEnabled(False)
-        
+        self.init_scene_setting()
+                
         self.listWidget.addItem(str(self.scene_start_frame_index) + "_" + str(self.scene_end_frame_index))
     
-    def saveAllScenes(self):
-        
-        if self.play:
-            self.play = False
+    def move_scene(self):
+        #해당 씬의 시작지점으로 이동
+        if self.video_play_timer.isActive():
             self.video_play_timer.stop()
         
+        clicked_item = self.listWidget.currentItem().text()
+        clicked_item = clicked_item.split('_')
+            
+        start_frame_index = int(clicked_item[0])
+        
+        self.frame_index = start_frame_index
+        self.video_capture.set(cv2.CAP_PROP_POS_FRAMES, self.frame_index)
+        
+        self.read_next_frame()
+        
+        print(str(self.listWidget.currentRow()) + " : " + self.listWidget.currentItem().text())
+
+    def remove_scene(self):
+        self.removeItemRow = self.listWidget.currentRow()
+        self.listWidget.takeItem(self.removeItemRow)
+        
+    def save(self):
+        if self.video_play_timer.isActive():
+            self.video_play_timer.stop()
+
         self.scene_progressbar_timer.stop()
+        
+        if self.listWidget.count() == 0:
+            return None
         
         if not os.path.isdir("./" + self.video_name):
             os.mkdir("./" + self.video_name)
@@ -186,17 +247,12 @@ class WindowClass(QMainWindow, form_class) :
                 read_frame, frame = self.video_capture.read()
                 
                 frame_name = self.video_name + "_f" + format(i, '05d') + ".png"
-                print(frame_name)
                 cv2.imwrite(os.path.join(scene_folder, frame_name), frame)
-                
-            print(start_frame_index, end_frame_index)
-        
+
         self.scene_progressbar_timer.start()
             
-    def showHorizontalSliderValue(self):
-
-        if self.play:
-            self.play = False
+    def move_frame(self):
+        if self.video_play_timer.isActive():
             self.video_play_timer.stop()
             
         self.frame_index = self.horizontalSlider.value()-1
@@ -207,9 +263,12 @@ class WindowClass(QMainWindow, form_class) :
         if not self.pushButton_scene_start.isEnabled():#
             if self.frame_index < self.scene_start_frame_index:
                 QMessageBox.question(self, 'Message', 'Scene setting is intialized', QMessageBox.Yes)
-                self.initSceneSetting()
+                self.init_scene_setting()
             
     def read_next_frame(self):
+        if not self.pushButton_play.isEnabled():
+            return None
+        
         read_frame, frame = self.video_capture.read()
         
         if read_frame:
@@ -231,6 +290,8 @@ class WindowClass(QMainWindow, form_class) :
 
     
     def draw_scene_progress_bar(self):
+        if not self.pushButton_play.isEnabled():
+            return None
         
         scene_progress_bar = np.zeros((self.label_scene_progress_bar.height(), self.label_scene_progress_bar.width(), 3), np.uint8)
         
@@ -253,7 +314,9 @@ class WindowClass(QMainWindow, form_class) :
         qImg = QImage(scene_progress_bar.data, width, height, bytesPerLine, QImage.Format_RGB888)
         pixmap01 = QPixmap.fromImage(qImg)
         self.label_scene_progress_bar.setPixmap(pixmap01)
-    
+            
+
+
 
 if __name__ == "__main__" :
     #QApplication : 프로그램을 실행시켜주는 클래스
