@@ -10,3 +10,8 @@ still working on it...
 2. WidgetList에서 씬 클릭하면 해당 씬의 시작 시각에 해당하는 프레임 출력 후 일시 정지
 
 3. 사이즈 adaptive 하게 
+
+# References
+
+http://www.myiconfinder.com/icon/pause-break-music-media-player-button-buttons-android-plastic-solid-black-active-default/744
+http://www.myiconfinder.com/icon/play-start-run-go-action-music-media-player-button-buttons-android-plastic-solid-black-active-default/746
