@@ -218,14 +218,14 @@ class WindowClass(QMainWindow, form_class) :
         self.removeItemRow = self.listWidget.currentRow()
         self.listWidget.takeItem(self.removeItemRow)
         
-    def save(self):
+    def save(self):       
+        if self.listWidget.count() == 0:
+            return None
+        
         if self.video_play_timer.isActive():
             self.video_play_timer.stop()
 
         self.scene_progressbar_timer.stop()
-        
-        if self.listWidget.count() == 0:
-            return None
         
         if not os.path.isdir("./" + self.video_name):
             os.mkdir("./" + self.video_name)
