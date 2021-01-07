@@ -53,7 +53,7 @@ def letter_box_resize(img, dsize):
                              value=(0, 0, 0))
 
     try:
-        if img.shape[0] != target_height and img.shape[1] != target_width:  # 둘 중 하나는 같아야 함
+        if not(img.shape[0] == target_height and img.shape[1] == target_width):  # 둘 중 하나는 같아야 함
             raise Exception('Letter box resizing method has problem.')
     except Exception as e:
         print('Exception: ', e)
@@ -71,15 +71,15 @@ class WindowClass(QMainWindow, form_class) :
         self.video_capture = None
         
         #Icon Load
-        self.pushButton_file_open.setIcon(QIcon(os.path.join(folder_abspath, 'icon_file_open.png')))
+        self.pushButton_file_open.setIcon(QIcon(os.path.join(folder_abspath, 'images', 'icon_file_open.png')))
         
-        self.pushButton_play.setIcon(QIcon(os.path.join(folder_abspath, 'icon_play.png')))
+        self.pushButton_play.setIcon(QIcon(os.path.join(folder_abspath, 'images', 'icon_play.png')))
         self.pushButton_play.setIconSize(QSize(32, 32))
         
-        self.pushButton_scene_save.setIcon(QIcon(os.path.join(folder_abspath, 'icon_save.png')))
+        self.pushButton_scene_save.setIcon(QIcon(os.path.join(folder_abspath, 'images', 'icon_save.png')))
         self.pushButton_scene_save.setIconSize(QSize(32, 32))
         
-        self.pushButton_scene_remove.setIcon(QIcon(os.path.join(folder_abspath, 'icon_remove.png')))
+        self.pushButton_scene_remove.setIcon(QIcon(os.path.join(folder_abspath, 'images', 'icon_remove.png')))
         self.pushButton_scene_save.setIconSize(QSize(32, 32))
     
         #버튼별 이벤트 연결
@@ -172,10 +172,10 @@ class WindowClass(QMainWindow, form_class) :
             return None
         
         if self.video_play_timer.isActive():# 재생중이였다면
-            self.pushButton_play.setIcon(QIcon(os.path.join(folder_abspath, 'icon_play.png')))
+            self.pushButton_play.setIcon(QIcon(os.path.join(folder_abspath, "images", 'icon_play.png')))
             self.video_play_timer.stop()
         else: # 일시정지 상태였다면
-            self.pushButton_play.setIcon(QIcon(os.path.join(folder_abspath, 'icon_pause.png')))
+            self.pushButton_play.setIcon(QIcon(os.path.join(folder_abspath, "images", 'icon_pause.png')))
             self.video_play_timer.start()
     
     def init_scene_setting(self):

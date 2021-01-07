@@ -24,11 +24,11 @@ videos = [os.path.join(video_dir, video_file) for video_file in os.listdir(video
 
 for video in videos:
     
-    if not video.lower().endswith((".avi", ".mp4")):
+    if not video.lower().endswith((".avi", ".mp4", ".mkv")):
         continue
     
-    video_name = os.path.basename(video)
-    video_name = video_name.replace(" ", "_")
+    video_name = Path(video).resolve().stem
+    video_name = video_name.replace(" ", "_") + ".mp4"
     
     output = os.path.join(output_dir, video_name)
     
