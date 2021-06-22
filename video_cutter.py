@@ -81,7 +81,12 @@ class WindowClass(QMainWindow, form_class) :
         
         self.pushButton_scene_remove.setIcon(QIcon(os.path.join(folder_abspath, 'images', 'icon_remove.png')))
         self.pushButton_scene_save.setIconSize(QSize(32, 32))
-    
+
+        self.pushButton_forward.setIcon(QIcon(os.path.join(folder_abspath, 'images', 'icon_forward.png')))
+        self.pushButton_forward.setIconSize(QSize(32, 32))
+        self.pushButton_backward.setIcon(QIcon(os.path.join(folder_abspath, 'images', 'icon_backward.png')))
+        self.pushButton_backward.setIconSize(QSize(32, 32))
+
         #버튼별 이벤트 연결
         self.pushButton_file_open.clicked.connect(self.load_video)
         self.pushButton_play.clicked.connect(self.play)
@@ -90,7 +95,9 @@ class WindowClass(QMainWindow, form_class) :
         self.pushButton_scene_end.pressed.connect(self.set_scene_end_frame)
         self.pushButton_scene_save.clicked.connect(self.save)
         self.pushButton_scene_remove.clicked.connect(self.remove_scene)
-        
+        self.pushButton_forward.clicked.connect(self.play_forward)
+        self.pushButton_backward.clicked.connect(self.play_backward)
+
         #버튼 비활성화
         self.pushButton_play.setEnabled(False)
         self.pushButton_scene_init.setEnabled(False)
@@ -98,7 +105,8 @@ class WindowClass(QMainWindow, form_class) :
         self.pushButton_scene_end.setEnabled(False)
         self.pushButton_scene_save.setEnabled(False)
         self.pushButton_scene_remove.setEnabled(False)
-        
+        self.pushButton_forward.setEnabled(False)
+        self.pushButton_backward.setEnabled(False)
         
         #슬라이더 비활성화 및 이벤트 연결
         self.horizontalSlider.setEnabled(False)
@@ -116,6 +124,8 @@ class WindowClass(QMainWindow, form_class) :
 
         #키 이벤트 정의
         QShortcut(Qt.Key_Space, self, self.play)
+        QShortcut(Qt.Key_Right, self, self.play_forward)
+        QShortcut(Qt.Key_Left, self, self.play_backward)
         
         #씬 위젯 이벤트 연결
         self.listWidget.itemClicked.connect(self.move_scene)
@@ -163,6 +173,8 @@ class WindowClass(QMainWindow, form_class) :
         self.pushButton_scene_end.setEnabled(False)
         self.pushButton_scene_save.setEnabled(True)
         self.pushButton_scene_remove.setEnabled(True)
+        self.pushButton_forward.setEnabled(True)
+        self.pushButton_backward.setEnabled(True)
         
         self.listWidget.clear()
         self.read_next_frame()
@@ -177,7 +189,7 @@ class WindowClass(QMainWindow, form_class) :
         else: # 일시정지 상태였다면
             self.pushButton_play.setIcon(QIcon(os.path.join(folder_abspath, "images", 'icon_pause.png')))
             self.video_play_timer.start()
-    
+                   
     def init_scene_setting(self):
         self.pushButton_scene_start.setEnabled(True)
         self.pushButton_scene_end.setEnabled(False)
@@ -222,16 +234,21 @@ class WindowClass(QMainWindow, form_class) :
         if self.listWidget.count() == 0:
             return None
         
+        QMessageBox.question(self, 'Message', 'Image save Start!', QMessageBox.Yes)
+        print('-' + self.video_name + '-')
+
         if self.video_play_timer.isActive():
             self.video_play_timer.stop()
 
         self.scene_progressbar_timer.stop()
         
-        if not os.path.isdir("./" + self.video_name):
-            os.mkdir("./" + self.video_name)
-        
+        # if not os.path.isdir("./" + self.video_name):
+        #     os.mkdir("./" + self.video_name)
+        scene_folder = "./img"
+
         for item_index in range(self.listWidget.count()):
             item = self.listWidget.item(item_index).text()
+            print('start ' + item)
             item = item.split('_')
             
             start_frame_index = int(item[0])
@@ -239,15 +256,41 @@ class WindowClass(QMainWindow, form_class) :
             
             self.video_capture.set(cv2.CAP_PROP_POS_FRAMES, start_frame_index)
             
-            scene_folder = os.path.join("./", self.video_name, "s" + format(item_index + 1, '02d'))
+            #scene_folder = os.path.join("./", self.video_name, "s" + format(item_index + 1, '02d'))
+
+            # 충주 영상은 30fps
             for i in range(start_frame_index, end_frame_index):
                 if not os.path.isdir(scene_folder):
                     os.mkdir(scene_folder)
                 
-                read_frame, frame = self.video_capture.read()
+                total_frame = end_frame_index - start_frame_index 
                 
-                frame_name = self.video_name + "_f" + format(i, '05d') + ".png"
-                cv2.imwrite(os.path.join(scene_folder, frame_name), frame)
+                # 10초 이하면 1fps(1초간격)로 뽑기
+                # 10초 이상 20초 이하면 0.5fps(2초간격)로 뽑기
+                # 20초 이상 30초 이하면 0.4fps(2.5초간격)로 뽑기
+                # 30초 이상 50초 이하면 0.3fps(3.3초간격)로 뽑기
+                # 50초 초과면 0.2fps(5초간격)으로 뽑기
+                if total_frame < 300:
+                    fps_value = 30
+                elif total_frame < 600:
+                    fps_value = 60
+                elif total_frame < 900:
+                    fps_value = 75
+                elif total_frame < 1500:
+                    fps_value = 100
+                else:
+                    fps_value = 150
+                    
+                if i % fps_value == 0:
+                    print(str(i))
+                    read_frame, frame = self.video_capture.read()
+                    frame_name = self.video_name + "_f" + format(i, '05d') + ".jpg"
+                    cv2.imwrite(os.path.join(scene_folder, frame_name), frame)
+                else:
+                    read_frame, frame = self.video_capture.read()
+
+        QMessageBox.question(self, 'Message', 'Image save done!', QMessageBox.Yes)
+        print('-END-')
 
         self.scene_progressbar_timer.start()
             
@@ -264,7 +307,70 @@ class WindowClass(QMainWindow, form_class) :
             if self.frame_index < self.scene_start_frame_index:
                 QMessageBox.question(self, 'Message', 'Scene setting is intialized', QMessageBox.Yes)
                 self.init_scene_setting()
+                
+    def play_forward(self):
+        if not self.pushButton_forward.isEnabled():
+            return None   
             
+        self.frame_index = self.horizontalSlider.value()-1
+        self.video_capture.set(cv2.CAP_PROP_POS_FRAMES, self.frame_index + 150)     # +5초
+        
+        read_frame, frame = self.video_capture.read()
+        
+        if read_frame:
+            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            frame = letter_box_resize(frame, (self.label_frame.width(), self.label_frame.height()))
+            height, width, channels = frame.shape
+            bytesPerLine = channels * width
+            qImg = QImage(frame.data, width, height, bytesPerLine, QImage.Format_RGB888)
+            pixmap01 = QPixmap.fromImage(qImg)
+            
+            self.label_frame.setPixmap(pixmap01)
+            if self.frame_index > self.video_num_frames - 150:
+                self.frame_index = self.video_num_frames
+            else:
+                self.frame_index += 150
+
+            self.horizontalSlider.blockSignals(True)
+            self.horizontalSlider.setValue(self.frame_index)
+            self.horizontalSlider.blockSignals(False)
+            
+            self.label_frame_index.setText(str(self.frame_index)+ "/" + str(self.video_num_frames))
+        
+        self.video_play_timer.start()
+
+    def play_backward(self):
+        if not self.pushButton_backward.isEnabled():
+            return None  
+
+        self.frame_index = self.horizontalSlider.value()-1
+        self.video_capture.set(cv2.CAP_PROP_POS_FRAMES, self.frame_index - 150)     # -5초
+        
+        read_frame, frame = self.video_capture.read()
+        
+        if read_frame:
+            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            frame = letter_box_resize(frame, (self.label_frame.width(), self.label_frame.height()))
+            height, width, channels = frame.shape
+            bytesPerLine = channels * width
+            qImg = QImage(frame.data, width, height, bytesPerLine, QImage.Format_RGB888)
+            pixmap01 = QPixmap.fromImage(qImg)
+            
+            self.label_frame.setPixmap(pixmap01)
+
+            if self.frame_index < 150:
+                self.frame_index = 0
+            else:
+                self.frame_index -= 150
+
+            self.horizontalSlider.blockSignals(True)
+            self.horizontalSlider.setValue(self.frame_index)
+            self.horizontalSlider.blockSignals(False)
+            
+            self.label_frame_index.setText(str(self.frame_index)+ "/" + str(self.video_num_frames))
+        
+        self.video_play_timer.start()
+    
     def read_next_frame(self):
         if not self.pushButton_play.isEnabled():
             return None
@@ -280,7 +386,7 @@ class WindowClass(QMainWindow, form_class) :
             pixmap01 = QPixmap.fromImage(qImg)
             
             self.label_frame.setPixmap(pixmap01)
-            self.frame_index += 1
+            self.frame_index += 1       ## 이거 건너뛰게 설정 -> 빨리감기
 
             self.horizontalSlider.blockSignals(True)
             self.horizontalSlider.setValue(self.frame_index)
